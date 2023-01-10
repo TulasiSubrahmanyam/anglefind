@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body {
+                overflow: hidden;
+                margin: 0px;
+                font-family: "droid sans";
+            }
+
+            #instructions {
+                color: white;
+                position: absolute;
+                padding: 20px;
+                top: 10px;
+                font-family: monospace;
+                width: 100%;
+                height: 100px;
+                border-radius: 20px;
+            }
+
+            .measurementLabel {
+                background-color: rgb(36, 35, 35);
+                color: rgb(255, 255, 255);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+                padding: 2px;
+                border-radius: 2px;
+            }
+            .labelstyle{
+                background-color: transparent;
+                color: rgb(5, 5, 5);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+            }
+            .angleLabel{
+                background-color: transparent;
+                color: rgb(15, 15, 14);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+            }
+            #button-click{
+                color:white;
+                background-color: rgb(241, 62, 62);
+                border-radius: 10px;
+                border: none;
+                text-align: center;
+                top: 300px;
+                margin: 20px;
+                height: 40px;
+                width: 110px;
+            }
+            #hidedata{
+                color:white;
+                background-color: rgb(241, 62, 62);
+                border-radius: 10px;
+                width: 80px;
+                border: none;
+                text-align: center;
+                top: 300px;
+                margin: 20px;
+                height: 40px;
+            }
+            .orientation-helper-in-scene {
+			position: fixed;
+			bottom: 50px;
+			right: 50px;
+			width: 300px;
+			height: 300px;
+			z-index: 0;
+            
+		}
+        .buttonContainer{
+            display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+        }
+        </style>
+       
+        <script type="importmap">
+			{
+				"imports": {
+					"three": "./three.module.js"
+				}
+			}
+		</script>
+
+    </head>
+
+    <body id="container">
+
+        <div id="instructions">
+            Press CTRL + Left Mouse Click to start drawing a line. <br />Continue to hold CTRL and Left Mouse
+            Click again to mark the end of the line.
+            <div class="buttonContiner">
+            <button id="button-click" value="off">Measurements </button>
+            
+            <button id="hidedata" value="off"> Show Text</button>
+            </div>
+        </div>
+        
+
+        <script type="module">
+            import * as THREE from './three.module.js';
+            import { OrbitControls } from './OrbitControls.js';
+            import { GLTFLoader } from './GLTFLoader.js';
+            import { RGBELoader } from './RGBELoader.js';
+            import { CSS2DRenderer, CSS2DObject } from './CSS2DRenderer.js';
+            import { OrientationHelper } from './OrientationHelper.js';
+
+            import Stats from './stats.module.js';//node_modules\three\examples\jsm\libs\stats.module.js
+			import { GPUStatsPanel } from './GPUStatsPanel.js';
+
+            import { GUI } from './lil-gui.module.min.js';
+          //  import { Line2 } from './Line2.js';
+			import { LineMaterial } from './LineMaterial.js';
+			import { LineGeometry } from './LineGeometry.js';
+			import * as GeometryUtils from './GeometryUtils.js';
+
+            import { FontLoader } from './FontLoader.js';
+			import { TextGeometry } from './TextGeometry.js';
+
+            const scene = new THREE.Scene()
+
+            var light = new THREE.SpotLight()
+            light.position.set(12.5, 12.5, 12.5)
+            light.castShadow = true
+            light.shadow.mapSize.width = 1024
+            light.shadow.mapSize.height = 1024
+            scene.add(light)
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+            camera.position.x = 15
+            camera.position.y = 15
+            camera.position.z = 15
+            ;
+
+            const renderer = new THREE.WebGLRenderer()
+            renderer.physicallyCorrectLights = true;
+            renderer.shadowMap.enabled = true
+            renderer.outputEncoding = THREE.sRGBEncoding
+            renderer.setSize(window.innerWidth, window.innerHeight)
+            document.body.appendChild(renderer.domElement)
+
+            
+            const labelRenderer = new CSS2DRenderer()
+            labelRenderer.setSize(window.innerWidth, window.innerHeight)
+            labelRenderer.domElement.style.position = 'absolute'
+            labelRenderer.domElement.style.top = '0px'
+            labelRenderer.domElement.style.pointerEvents = 'none'
+            document.body.appendChild(labelRenderer.domElement)
+            
+            const  stats = new Stats();
+			document.body.appendChild( stats.dom );
+
+           const gpuPanel = new GPUStatsPanel( renderer.getContext() );
+				stats.addPanel( gpuPanel );
+				stats.showPanel( 0 );
+
+           const controls = new OrbitControls(camera, renderer.domElement)
+           controls.enabled=true
+
+           const container=document.getElementById("container")
+           const toggleButton=document.getElementById("hidedata")
+
+
+           const pickableObjects = new Array()
+            const loader = new GLTFLoader()
+            loader.load(
+                './ErgonomicTableScene_Nov_22_22.glb',
+                function (gltf) {
+                    gltf.scene.traverse(function (child) {
+                        if (child.isMesh) {
+                            let m = child
+                            switch (m.name) {
+                                case 'Plane':
+                                    m.receiveShadow = true
+                                    break
+                                default:
+                                    m.castShadow = true
+                            }
+                            pickableObjects.push(m)
+                        }
+                    })
+                    scene.add(gltf.scene)
+                    
+                },
+                (xhr) => {
+                    console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+                    
+                },
+                (error) => {
+                    console.log(error)
+                }
+            )
+
+            window.addEventListener('resize', onWindowResize, false)
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight
+                camera.updateProjectionMatrix()
+                renderer.setSize(window.innerWidth, window.innerHeight)
+                labelRenderer.setSize(window.innerWidth, window.innerHeight)
+                render()
+              
+            }
+              
+           const axesHelper = new THREE.AxesHelper(0.5);
+          
+		   scene.add( axesHelper );
+
+     //----orientation helper------
+       const ohOptions = {
+        className: 'orientation-helper-in-scene'
+        }, 
+        ohLabels = {
+            px: 'East',
+            nx: 'West',
+            pz: 'South',
+            nz: 'North',
+            py: 'Sky',
+            ny: 'Ground'
+        };
+         let _lastCLick = Date.now();
+         let orientationHelper = new OrientationHelper( camera, controls, ohOptions, ohLabels );
+            orientationHelper.addEventListener( 'change', onOrientationHelperChange );
+            orientationHelper.addEventListener( 'click', onOrientationHelperClick );
+
+            document.body.appendChild(orientationHelper.domElement);
+            const raycaster = new THREE.Raycaster()
+            let intersects
+            const touchs= new THREE.Vector2()
+         
+        
+            let ctrlDown = false
+            let lineId = 0
+            let lineID1=0
+            let line
+            let drawingLine = false
+            let points
+            let measurementDiv ,matLine ,dot1,dot2, angleDiv ,labelText1,labelText1D,labelText2, labelText2D,labelText3,labelText3D,labelText4,labelText4D
+            let pickpoint=null
+            const measurementLabels = []
+            const angleLabels=[]
+           
+            let buttonClicks=document.getElementById("button-click")
+            var screenCoords = new THREE.Vector3();
+
+
+            buttonClicks.onclick=function(event){
+                if(buttonClicks.value==="off"){
+                console.log("Measurement Mode Active")
+                buttonClicks.value="on"
+                controls.enableRotate=false;
+                controls.enableZoom = true;
+                controls.enablePan = true;
+                buttonClicks.style.backgroundColor="green"
+                window.addEventListener('touchstart', touchon,false)
+                window.addEventListener('touchend',  touchoff,false)
+                document.addEventListener('pointermove', onDocumentTouchMove,false)    
+                renderer.domElement.addEventListener('pointerdown',onlyClick,false)
+                //document.addEventListener('mousemove', onDocumentMouseMove, false)
+                
+            }else if(buttonClicks.value==="on"){
+                console.log("Measurement Mode Inactive")
+                controls.enabled=true
+                buttonClicks.value='off'
+                buttonClicks.style.backgroundColor="red"
+                scene.remove(line)
+                scene.remove(measurementLabels[lineId])
+                
+                window.removeEventListener('touchstart', touchon,false)
+                window.removeEventListener('touchend',  touchoff,false)
+               document.removeEventListener('pointermove', onDocumentTouchMove,false)    
+                renderer.domElement.removeEventListener('pointerdown',onlyClick,false)
+            }
+                
+            }
+
+ 
+
+const layers = {
+
+'Toggle Name': function () {
+
+  
+    camera.layers.toggle( 0 );
+
+}
+
+};
+
+//--------Touchon function---------------
+            function touchon(e) {
+                
+                console.log("Touch Start") 
+             
+                   if(e.type==="touchstart"){
+                     
+                               ctrlDown=true;
+                              
+                               controls.enableRotate=false;
+                               controls.enableZoom = true;
+                               controls.enablePan = true;
+                               renderer.domElement.style.cursor = 'crosshair' 
+                            
+                               let rect= renderer.domElement.getBoundingClientRect();
+                               let x9 = event.touches[0].clientX - rect.left;
+                               let y9 = event.touches[0].clientY - rect.top;
+                               console.log("Canvas Full Coordinates",rect.top, rect.left, rect.width, rect.height);
+                               console.log("Canvas Screen Coordinations"," x: " + x9, " y: " + y9);
+   
+                           
+                           } 
+                       }
+
+//---------onclick event picking specific point ----------
+        function onlyClick(event) {
+           
+                touchs.x= (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+                touchs.y= -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+                    
+            if (!ctrlDown) {
+                raycaster.setFromCamera(touchs, camera)
+                //console.log("raycaster")
+                intersects = raycaster.intersectObjects(pickableObjects, false)
+
+                
+                if (intersects.length > 0) {
+
+                    initGui()
+                    //--Starting dot creation function---
+                    initDot1()
+
+                    //--------world coordinates creating-------
+                    labelText1 = document.createElement('div');
+                    labelText1.className = 'labelstyle'
+                    labelText1.innerText = `P1(X: ${dot1.position.x.toFixed(3)}, Y: ${dot1.position.y.toFixed(3)}, Z: ${dot1.position.z.toFixed(3)})`;
+                    labelText1D = new CSS2DObject(labelText1)
+                    labelText1D.position.copy(intersects[0].point)
+                    labelText1D.position.y += 0.1; //position above shows                    
+                  //  scene.add(labelText1D);
+               
+
+                
+                    //------Screencoordinates dispalying picking point creating------   
+                    labelText2 = document.createElement('div');
+                    labelText2.className = 'labelstyle'
+                    screenCoords.set(intersects[0].point.x,intersects[0].point.y,intersects[0].point.z);
+                    screenCoords.project(camera);
+                    screenCoords.x =Math.round((screenCoords.x + 1) * window.innerWidth / 2);
+                    screenCoords.y =Math.round((-screenCoords.y + 1) * window.innerHeight / 2);
+                    labelText2.innerText = `P1 ScreenCoordinates(X: ${screenCoords.x}, Y:${screenCoords.y})`;
+                    console.log(`P1 ScreenCoordinates(X: ${screenCoords.x}, Y:${screenCoords.y})`)
+                    labelText2D = new CSS2DObject(labelText2)
+                    labelText2D.position.copy(intersects[0].point)
+                    labelText2D.position.y += 0.3; 
+                   // scene.add(labelText2D);
+
+
+               //------start the line creation----
+                   console.log("!Drawline")
+                    points = []
+                   const p=intersects[0].point
+                   points.push(p)
+                   points.push(p)
+                   const geometry = new THREE.BufferGeometry().setFromPoints(points)
+                   
+                  line.BufferGeometry.vertices[0] = points[points.length - 1];
+                  line.BufferGeometry.vertices[1] = points[points.length - 1];
+                  line.BufferGeometry.verticesNeedUpdate = true;
+                   matLine= new THREE.LineBasicMaterial({
+                            color:"#FF0000" ,
+                            linewidth:3                 
+                       })
+                       line=new THREE.LineSegments(geometry, matLine )
+          
+                     event.preventDefault()
+                     scene.add(line)
+              
+                   
+                //---angle text content create-----
+                   angleDiv = document.createElement('div');
+                   angleDiv.className = 'angleLabel'; 
+                   angleDiv.innerText = '0.0°'; 
+                   const angleLabel = new CSS2DObject(angleDiv);
+                   angleLabel.position.copy(intersects[0].point); 
+                    angleLabel.position.z+=0.2
+                   angleLabels[lineId] = angleLabel;
+                  // scene.add(angleLabels[lineId]); 
+                 
+               //----measurement text content create-----
+                  measurementDiv = document.createElement('div')
+                  measurementDiv.className = 'measurementLabel'
+                  measurementDiv.innerText = '0.0m'
+                  const measurementLabel = new CSS2DObject(measurementDiv)
+                  measurementLabel.position.copy(intersects[0].point)
+                  measurementLabels[lineId] = measurementLabel
+                  scene.add(measurementLabels[lineId])
+
+               if (!drawingLine) {
+               
+                //--find canvas accurate pixels min max---
+               let rect= renderer.domElement.getBoundingClientRect();
+               let x9 = event.clientX - rect.left;
+               let y9 = event.clientY - rect.top;
+               const intersection = intersects[0];
+        
+               // Get the UV coordinates of the intersection point
+               const uv = intersection.uv;
+               console.log("Intersect UV Screen Coordinates",uv.x,uv.y)
+               console.log("TouchOn World Co-ordinates:",intersects[0].point)
+                   //console.log("Intersect Length",intersects.length)
+                   drawingLine = true
+                  // console.log("raycaster-1") 
+            
+               } else {
+                   //finish the line
+                   const positions = line.geometry.attributes.position.array
+                   positions[3] = intersects[0].point.x
+                   positions[4] = intersects[0].point.y
+                   positions[5] = intersects[0].point.z
+                   line.geometry.attributes.position.needsUpdate = true
+                   lineId++
+                   lineID1++
+                   drawingLine = false
+                   //console.log("raycaster-2") 
+               }
+           }
+       }
+   }
+
+        //-----Touch Move Function----------
+        function onDocumentTouchMove(e) {
+                    //  console.log("Touch Move")
+                        //event.preventDefault()  
+                
+                        touchs.x= (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+                        touchs.y= -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+                    
+                    
+                        if (drawingLine) {
+                            raycaster.setFromCamera(touchs, camera)
+                            intersects = raycaster.intersectObjects(pickableObjects, false)
+                            if (intersects.length > 0) {
+                            
+                                const positions = line.geometry.attributes.position.array
+                              const v0 = new THREE.Vector3(positions[0], positions[1], positions[2]);
+                             
+                               const v1 = new THREE.Vector3( intersects[0].point.x, intersects[0].point.y, intersects[0].point.z );
+                                //const v2=new THREE.Vector3( intersects[0].point.x, intersects[0].point.y, intersects[0].point.z)
+ 
+     
+                                positions[3] = intersects[0].point.x
+                                positions[4] = intersects[0].point.y
+                                positions[5] = intersects[0].point.z
+
+                                //-----distance finging-------
+                                const distance = v0.distanceTo(v1)
+                                line.geometry.attributes.position.needsUpdate = true
+                                
+                                measurementLabels[lineId].element.innerText = distance.toFixed(2) + 'm';
+                                measurementLabels[lineId].position.lerpVectors(v0, v1,0.5);
+
+                                //----angle finging------
+                                const angle = v0.normalize().angleTo(v1.normalize());
+                                angleLabels[lineId].element.innerText = ((angle * 180) / Math.PI).toFixed(2) + '°';
+                                //angleLabel.position.lerpVectors(v0,v1,0.5)
+                                //console.log("Angle between v0 to v1",angle)
+                                console.log("Angle between v0 to v1",((angle* 180) / Math.PI));
+ /*if (points.length >= 1) {
+    console.log("2work")
+    if (points.length <= 2) {
+     // var line = new THREE.Line(geometry, material);
+      scene.add(line);
+      line.BufferGeometry.vertices[0] = points[points.length - 2];
+      line.BufferGeometry.vertices[1] = points[points.length - 1];
+      line.BufferGeometry.verticesNeedUpdate = true;
+      console.log("3work")
+    }
+  }*/
+                        
+                        }
+                    
+                    }
+                }
+
+            //-------Touchoff Function--------
+                function touchoff(event) {
+                     //  console.log("Touch End Screen Co-ordinates",touchs
+                     ctrlDown = false
+                     //controls.enabled=true
+                     // controls.enableZoom=true
+                    
+                    renderer.domElement.style.cursor = 'pointer'
+                    if (drawingLine) {
+                        //delete the last line because it wasn't committed
+                        //scene.remove(line)
+                         //scene.remove(measurementLabels[lineId])
+                         drawingLine = false
+                         controls.enableRotate=false
+                         event.preventDefault()
+                        // let P = intersects[0].point
+                        if(intersects.length>0){
+                          raycaster.setFromCamera(touchs, camera)
+                          intersects = raycaster.intersectObjects(pickableObjects, false)
+                          console.log("TouchOff World Co-ordinates:",intersects[0].point)
+                        //--Ending dot creation function---
+                          initDot2()
+
+                       //--------Create a label to display the dotpoint coordinates---------
+                        labelText3 = document.createElement('div');
+                        labelText3.className = 'labelstyle'
+                        labelText3.innerText = `P2(X: ${dot2.position.x.toFixed(3)},Y: ${dot2.position.y.toFixed(3)}, Z: ${dot2.position.z.toFixed(3)})`;
+                         labelText3D = new CSS2DObject(labelText3)
+                        labelText3D.position.copy(intersects[0].point)
+                        labelText3D.position.y += 0.1; //position above shows
+                      //  scene.add(labelText3D);
+
+                        //-------Create a label to display the dotpoint screencoordinates-------
+                       labelText4 = document.createElement('div');
+                       labelText4.className = 'labelstyle'
+                        screenCoords.set(intersects[0].point.x,intersects[0].point.y,intersects[0].point.z);
+                        //console.log("screennewone",screenCoords.set(intersects[0].point.x,intersects[0].point.y,intersects[0].point.z))
+                        screenCoords.project(camera);
+                        //console.log("projet",screenCoords)
+                        // Convert from normalized coordinates to screen coordinates
+                        screenCoords.x =Math.round((screenCoords.x + 1) * window.innerWidth / 2);
+                        screenCoords.y =Math.round((-screenCoords.y + 1) * window.innerHeight / 2);
+                        //console.log("newone",screenCoords.x,screenCoords.y)
+                        // Use the screen coordinates to update the label
+                        labelText4.innerText = `P2 ScreenCoordinates(X: ${screenCoords.x} Y:${screenCoords.y})`;
+                        console.log(`P2 ScreenCoordinates(X: ${screenCoords.x}, Y:${screenCoords.y})`)
+                        //labe2.innerText = `P1 screen,X: ${dot1Position.x.toFixed(3)}, Y: ${dot1Position.y.toFixed(3)}`;
+                        labelText4D = new CSS2DObject( labelText4)
+                        labelText4D.position.copy(intersects[0].point)
+                        labelText4D.position.y += 0.3; //position above shows
+                       
+                       // scene.add(labelText4D);
+
+
+                        }
+                        console.log("Completed Drawing Line")
+                   }
+                
+            }
+          
+
+//-----------GUI Function Implementation----------------
+         
+                    function initGui() {
+
+                        const gui = new GUI();
+                        gui.domElement.style.width = '300px';
+                        
+                        // Define some parameters to control
+                        const params = {
+                        lineWidth: 3,
+                        color:"#FF0000" ,
+                        showGrid: false,
+                        //lightIntensity: 1.0
+                        };
+
+                       
+                        // Add a line width control .step(1).name('Line Width')
+                        gui.add(params, 'lineWidth', 1, 10).onChange( function ( val ) {
+
+                        matLine.linewidth = val;
+                        matLine.needsUpdate = true;
+                        console.log("MatLine.linewidth",matLine.linewidth)
+                        console.log(matLine.needsUpdate)
+                        } );
+
+                        // Add a color picker control
+                        gui.addColor(params, 'color').name('Line Color').onChange(function(val){
+                            // matLine.color=val;
+                            
+                            matLine.color =new THREE.Color(val);
+                        // material.color = Math.floor(Math.random() * 16777216);
+                            //material.color=val;
+                            matLine.needsUpdate = true;
+                            console.log("matLine.Color",matLine.color)
+                            console.log(matLine.needsUpdate)
+                        });
+                            const measurementControls = {
+                            fontSize: "20px",
+                            fontFamily: 'Arial',
+                            color: '#ff0000',
+                            backgroundColor: '#ffffff',
+                            padding:"3px",
+
+                            };
+                            const fontsize=['10px','12px','14px','18px','20px','24px','28px','30px','32px']
+                            gui.add(measurementControls, 'fontSize', fontsize).name('Font Size').onChange(function(val) {
+                            measurementDiv.style.fontSize = val;
+                            console.log("Measurement Font Size:", measurementDiv.style.fontSize)
+                            
+                            });
+                            const fontFamilies = ['Arial', 'Helvetica', 'Times New Roman', 'Verdana', 'helvetiker', 'optimer', 'gentilis', 'droid sans', 'droid serif'];
+                            gui.add(measurementControls, 'fontFamily', fontFamilies).name('Font Family').onChange(function(val) {
+                            measurementDiv.style.fontFamily = val;
+                            console.log("Measurement Font Family:", measurementDiv.style.fontFamily)
+                        
+                            });
+
+                            gui.addColor(measurementControls, 'color').name('Font Color').onChange(function(val) {
+                            measurementDiv.style.color = val;
+                            console.log("Measurement Font Folor:", measurementDiv.style.color)
+                            });
+                    
+                            gui.addColor(measurementControls, 'backgroundColor').onChange(function(val) {
+                                // Update the background color of the scene
+                                measurementDiv.style.backgroundColor=val
+                            // renderer.setClearColor(val);
+                                });
+                                // Get the intersection point
+
+                           //-----Strarting Dotpoint-----
+                            const dotFolder = gui.addFolder('Dot Start');
+                            const dotParameters={
+                                color:"#FF0000",
+                                scale:0.04,
+                            }
+                            const colorController = dotFolder.addColor(dotParameters, 'color');
+                            colorController.onChange(function(value) {
+                            dot1.material.color.set(value);
+                            });
+
+                            // add a scale controller to the GUI
+                            const scaleController = dotFolder.add(dotParameters, 'scale', 0.1, 10).name('Start Point');
+                            scaleController.onChange(function(value) {
+                            dot1.scale.set(value, value, value);
+                            });
+
+                             //-----Ending Dotpoint-----
+                            const dotFolder2 = gui.addFolder('Dot End');
+                            const dotParameters2={
+                                color:"#FF0000",
+                                scale:0.04,
+                            }
+                            const colorController2 = dotFolder2.addColor(dotParameters2, 'color');
+                            colorController2.onChange(function(value) {
+                            dot2.material.color.set(value);
+                            });
+
+                            // add a scale controller to the GUI
+                            const scaleController2 = dotFolder2.add(dotParameters2, 'scale', 0.1, 10).name('Start Point');
+                            scaleController2.onChange(function(value) {
+                            dot2.scale.set(value, value, value);
+                            });
+
+                           //------lable text show hide controls------
+                       
+                           gui.add( layers, 'Toggle Name' )
+                           
+              }
+
+
+                    //-----Dotcreating function----
+                    function initDot1(){
+                    //----Ending line dot point----- 
+                            dot1 = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.04),
+                            new THREE.MeshBasicMaterial({ color:"#FF0000" })
+                            );
+                            dot1.position.copy(intersects[0].point);
+                            scene.add(dot1);
+                    }
+                    function initDot2(){
+                    //----Ending line dot point----- 
+                            dot2 = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.04),
+                            new THREE.MeshBasicMaterial({ color:"#FF0000" })
+                            );
+                            dot2.position.copy(intersects[0].point);
+                            scene.add(dot2);
+                    }
+ //------orbitcontrol helper cube-----
+           function onOrientationHelperChange( ev ) {
+
+                    translateCamera( ev.direction );
+                 }
+
+          function onOrientationHelperClick( ev ) {
+
+            // Simulate double-click (less than 250ms)
+            let nClick = Date.now();
+            if ( nClick - _lastCLick < 250 ) {
+
+                translateCamera( ev.normal );
+
+            }
+            _lastCLick = nClick;
+          }
+
+//-----label text show hide button------
+
+         
+            toggleButton.onclick=function(event){
+                console.log("ToggleButton")
+                if(toggleButton.value==="off"){
+                toggleButton.value ="on"
+                scene.add(labelText1D)
+                scene.add(labelText2D)
+                scene.add(labelText3D)
+                scene.add(labelText4D)
+                scene.add(angleLabels[lineId])
+                toggleButton.innerHTML="Hide Text"
+                toggleButton.style.backgroundColor="green"
+                }
+                else if(toggleButton.value==="on"){
+                scene.remove(labelText1D)
+                scene.remove(labelText2D)
+                scene.remove(labelText3D)
+                scene.remove(labelText4D)
+                scene.remove(angleLabels[lineId])
+                toggleButton.value ="off"
+                toggleButton.innerHTML="Show Text"
+                toggleButton.style.backgroundColor="rgb(241, 62, 62)"
+                }
+            }
+           //-----------------------------------------//
+           function translateCamera( direction ) {
+
+            controls.enabled = false;
+
+            const dist = camera.position.distanceTo( controls.target ),
+                newCameraPos = controls.target.clone().add( direction.multiplyScalar( dist ) );
+
+            camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
+
+            controls.enabled = true;
+
+            }
+
+
+            var animate = function () {
+            requestAnimationFrame(animate)
+            controls.update()
+            render()			
+            }
+
+            function render() {
+
+            labelRenderer.render(scene, camera)
+            renderer.render(scene, camera)
+            camera.updateMatrixWorld()       
+            }
+            animate()
+            window.focus()
+        </script>
+    </body>
+</html>

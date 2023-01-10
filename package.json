@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "three": "^0.146.0"
+  },
+  "name": "cd",
+  "description": "",
+  "version": "1.0.0",
+  "main": "CSS2DRenderer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

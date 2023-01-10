@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body {
+                overflow: hidden;
+                margin: 0px;
+                font-family: "droid sans";
+            }
+
+            #instructions {
+                color: white;
+                position: absolute;
+                padding: 20px;
+                top: 10px;
+                font-family: monospace;
+                width: 100%;
+                height: 100px;
+                border-radius: 20px;
+            }
+
+            .measurementLabel {
+                background-color: rgb(36, 35, 35);
+                color: rgb(255, 255, 255);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+                padding: 2px;
+                border-radius: 2px;
+            }
+            .labelstyle{
+                background-color: transparent;
+                color: rgb(5, 5, 5);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+            }
+            .angleLabel{
+                background-color: transparent;
+                color: rgb(15, 15, 14);
+                font-size:20px;
+                font-weight: 500;
+                font-family: "Roboto";
+            }
+            #button-click{
+                color:white;
+                background-color: rgb(241, 62, 62);
+                border-radius: 10px;
+                border: none;
+                text-align: center;
+                top: 300px;
+                margin: 20px;
+                height: 40px;
+                width: 110px;
+            }
+            #hidedata{
+                color:white;
+                background-color: rgb(241, 62, 62);
+                border-radius: 10px;
+                width: 80px;
+                border: none;
+                text-align: center;
+                top: 300px;
+                margin: 20px;
+                height: 40px;
+            }
+            .orientation-helper-in-scene {
+			position: fixed;
+			bottom: 50px;
+			right: 50px;
+			width: 300px;
+			height: 300px;
+			z-index: 0;
+            
+		}
+        .buttonContainer{
+            display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+        }
+        </style>
+       
+        <script type="importmap">
+			{
+				"imports": {
+					"three": "./three.module.js"
+				}
+			}
+		</script>
+
+    </head>
+
+    <body id="container">
+
+        <div id="instructions">
+            Press CTRL + Left Mouse Click to start drawing a line. <br />Continue to hold CTRL and Left Mouse
+            Click again to mark the end of the line.
+            <div class="buttonContiner">
+            <button id="button-click" value="off">Measurements </button>
+            
+            <button id="hidedata" value="off"> Show Text</button>
+            </div>
+        </div>
+        <div id="canvas"></div>
+
+        <script type="module">
+            import * as THREE from './three.module.js';
+            import { OrbitControls } from './OrbitControls.js';
+            import { GLTFLoader } from './GLTFLoader.js';
+            import { RGBELoader } from './RGBELoader.js';
+            import { CSS2DRenderer, CSS2DObject } from './CSS2DRenderer.js';
+            import { OrientationHelper } from './OrientationHelper.js';
+
+            import Stats from './stats.module.js';//node_modules\three\examples\jsm\libs\stats.module.js
+			import { GPUStatsPanel } from './GPUStatsPanel.js';
+
+            import { GUI } from './lil-gui.module.min.js';
+          //  import { Line2 } from './Line2.js';
+			import { LineMaterial } from './LineMaterial.js';
+			import { LineGeometry } from './LineGeometry.js';
+			import * as GeometryUtils from './GeometryUtils.js';
+
+            import { FontLoader } from './FontLoader.js';
+			import { TextGeometry } from './TextGeometry.js';
+
+       // Set up the scene
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+
+var light = new THREE.SpotLight()
+light.position.set(12.5, 12.5, 12.5)
+light.castShadow = true
+light.shadow.mapSize.width = 1024
+light.shadow.mapSize.height = 1024
+scene.add(light)
+
+const renderer = new THREE.WebGLRenderer()
+renderer.physicallyCorrectLights = true;
+renderer.shadowMap.enabled = true
+renderer.outputEncoding = THREE.sRGBEncoding
+renderer.setSize(window.innerWidth, window.innerHeight)
+document.body.appendChild(renderer.domElement)
+
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enabled=true
+camera.position.z = 5;
+const axesHelper = new THREE.AxesHelper(0.5);
+scene.add( axesHelper );
+
+
+const pickableObjects = new Array()
+const loader = new GLTFLoader()
+loader.load(
+    './ErgonomicTableScene_Nov_22_22.glb',
+    function (gltf) {
+        gltf.scene.traverse(function (child) {
+            if (child.isMesh) {
+                let m = child
+                switch (m.name) {
+                    case 'Plane':
+                        m.receiveShadow = true
+                        break
+                    default:
+                        m.castShadow = true
+                }
+                pickableObjects.push(m)
+            }
+        })
+        scene.add(gltf.scene)
+        
+    },
+    (xhr) => {
+        console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+        
+    },
+    (error) => {
+        console.log(error)
+    }
+)
+
+window.addEventListener('resize', onWindowResize, false)
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    labelRenderer.setSize(window.innerWidth, window.innerHeight)
+    render()
+  
+}
+/*// Define the three points 90 degrees
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(1, 1, 0);
+var point3 = new THREE.Vector3(2, 1, 0);*/
+
+
+/*// Define the three points 90 z
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(1, 1, 0);
+var point3 = new THREE.Vector3(0, 0, 0);*/
+
+
+
+
+/*//Define the three points 90 y axis
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(2, 0, 0);
+var point3 = new THREE.Vector3(2, 1, 0);*/
+
+// Define the three points 90 z axis
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(1, 0, 1);
+var point3 = new THREE.Vector3(2, 0, 1);
+
+/* Define the three points
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(2, 0, 0);
+var point3 = new THREE.Vector3(1, 0, 1);*/
+
+// Create a Line and add it to the scene
+var geometry = new THREE.BufferGeometry().setFromPoints([point1, point2, point3]);
+var material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+var line = new THREE.Line(geometry, material);
+scene.add(line);
+
+// Find vectors for the two lines formed by the points
+var a = new THREE.Vector3().subVectors(point2, point1);
+var b = new THREE.Vector3().subVectors(point3, point1);
+
+// Find the angle between the vectors using the dot product
+var angle = Math.acos(a.dot(b) / (a.length() * b.length()));
+console.log("Angle:", angle);
+console.log(angle*180/Math.PI)
+
+if(a.dot(b) === 0){
+    console.log("Angle is exactly 180 degrees");
+}
+
+/*// Define the three points 180 floar
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(2, 0, 0);
+var point3 = new THREE.Vector3(3, 0, 0);
+
+// Create a Line and add it to the scene
+var geometry = new THREE.BufferGeometry().setFromPoints([point1, point2, point3]);
+var material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+var line = new THREE.Line(geometry, material);
+scene.add(line);*/
+
+/*// Calculate vectors between points
+var a = new THREE.Vector3();
+a.subVectors(point2, point1);
+
+var b = new THREE.Vector3();
+b.subVectors(point3, point1);
+
+var angle = Math.acos(a.dot(b) / (a.length() * b.length()));
+//console.log("Angle (radians): ", angle);
+
+var angleInDegrees = angle*180/Math.PI;
+//console.log("Angle (degrees): ", angleInDegrees);*/
+
+
+
+
+// Define the three points
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(2, 0, 0);
+var point3 = new THREE.Vector3(3, 0, 0);
+
+var dotGeometry = new THREE.SphereGeometry(0.1, 10, 10);
+var dotMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+// Create three dots and add them to the scene
+var dot1 = new THREE.Mesh(dotGeometry, dotMaterial);
+dot1.position.copy(point1);
+scene.add(dot1);
+
+var dot2 = new THREE.Mesh(dotGeometry, dotMaterial);
+dot2.position.copy(point2);
+scene.add(dot2);
+
+var dot3 = new THREE.Mesh(dotGeometry, dotMaterial);
+dot3.position.copy(point3);
+scene.add(dot3);
+
+// Find vectors for the two lines formed by the points
+var a = new THREE.Vector3().subVectors(point2, point1);
+var b = new THREE.Vector3().subVectors(point3, point1);
+
+// Find the angle between the vectors using the dot product
+var angle = Math.acos(a.dot(b) / (a.length() * b.length()));
+console.log("Angle:", angle);
+
+if(a.dot(b) === 0){
+    console.log("Angle is exactly 180 degrees");
+}
+
+
+
+
+
+
+
+/*// Define the points that form the first line line code
+var point1 = new THREE.Vector3(1, 0, 0);
+var point2 = new THREE.Vector3(1, 1, 0);
+
+// Create a line between the two points
+var lineGeometry = new THREE.BufferGeometry().setFromPoints([point1, point2]);
+var lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+var line = new THREE.Line(lineGeometry, lineMaterial);
+
+// Define the points that form the second line
+var point3 = new THREE.Vector3(0, 1, 0);
+var point4 = new THREE.Vector3(1, 1, 0);
+
+// Create a line between the two points
+var line2Geometry = new THREE.BufferGeometry().setFromPoints([point3, point4]);
+var line2Material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+var line2 = new THREE.Line(line2Geometry, line2Material);
+
+// Add the lines to the scene
+//scene.add(line);
+//scene.add(line2);
+
+
+// Find the direction vectors of the two lines
+var line1Direction = new THREE.Vector3().subVectors(point2, point1).normalize();
+var line2Direction = new THREE.Vector3().subVectors(point4, point3).normalize();
+
+// Find the angle between the lines using the dot product
+var angle = Math.acos(line1Direction.dot(line2Direction));*/
+
+//console.log("Angle:", angle);
+//console.log(angle*180/Math.PI)
+
+
+// Render the scene
+function render() {
+    requestAnimationFrame( render );
+    renderer.render( scene, camera );
+}
+render();
+
+
+
+        </script>
+    </body>
+</html>

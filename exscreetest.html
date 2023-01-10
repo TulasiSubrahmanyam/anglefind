@@ -1,0 +1,230 @@
+
+<html>
+    <head>
+        <style>
+            body {
+                overflow: hidden;
+                margin: 0px;
+            }
+
+            #instructions {
+                color: white;
+                position: absolute;
+              padding: 20px;
+                top: 10px;
+                font-family: monospace;
+                width: 100%;
+                height: 100px;
+                border-radius: 20px;
+            }
+
+            .measurementLabel {
+                font-family: monospace;
+                background-color: black;
+                color: white;
+            }
+            #button-click{
+                color:white;
+                background-color: red;
+                border-radius: 10px;
+           
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                top: 300px;
+                margin: 20px;
+                height: 40px;
+                
+            }
+            .orientation-helper-in-scene {
+			position: fixed;
+			bottom: 50px;
+			right: 50px;
+			width: 300px;
+			height: 300px;
+			z-index: 0;
+            
+		}
+        </style>
+       
+        <script type="importmap">
+			{
+				"imports": {
+					"three": "./three.module.js"
+				}
+			}
+		</script>
+
+    </head>
+
+    <body id="container">
+
+        <div id="instructions">
+            Press CTRL + Left Mouse Click to start drawing a line. <br />Continue to hold CTRL and Left Mouse
+            Click again to mark the end of the line.
+            
+            <button id="button-click" value="off">Measurements </button>
+            
+
+        </div>
+        
+
+        <script type="module">
+            import * as THREE from './three.module.js';
+          //  import { OrbitControls } from './OrbitControls.js';
+          //  import { GLTFLoader } from './GLTFLoader.js';
+           // import { RGBELoader } from './RGBELoader.js';
+            //import { CSS2DRenderer, CSS2DObject } from './CSS2DRenderer.js';
+            //import { OrientationHelper } from './OrientationHelper.js';
+           // import { TransformControls } from './TransformControls.js';
+          
+
+            const scene = new THREE.Scene()
+
+            var light = new THREE.SpotLight()
+            light.position.set(12.5, 12.5, 12.5)
+            light.castShadow = true
+            light.shadow.mapSize.width = 1024
+            light.shadow.mapSize.height = 1024
+            scene.add(light)
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+            camera.position.x = 15
+            camera.position.y = 15
+            camera.position.z = 15
+           
+
+            const renderer = new THREE.WebGLRenderer()
+            renderer.physicallyCorrectLights = true;
+            renderer.shadowMap.enabled = true
+            renderer.outputEncoding = THREE.sRGBEncoding
+            renderer.setSize(window.innerWidth, window.innerHeight)
+            document.body.appendChild(renderer.domElement)
+
+            
+            const labelRenderer = new CSS2DRenderer()
+            labelRenderer.setSize(window.innerWidth, window.innerHeight)
+            labelRenderer.domElement.style.position = 'absolute'
+            labelRenderer.domElement.style.top = '0px'
+            labelRenderer.domElement.style.pointerEvents = 'none'
+            document.body.appendChild(labelRenderer.domElement)
+
+
+           const controls = new OrbitControls(camera, renderer.domElement)
+           controls.enabled=true
+           /* controls.touches = {
+                    ONE: THREE.TOUCH.ROTATE,
+                    TWO: THREE.TOUCH.DOLLY_PAN
+                }*/
+           
+          const container=document.getElementById("container")
+           
+           const pickableObjects = new Array()
+       
+
+            window.addEventListener('resize', onWindowResize, false)
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight
+                camera.updateProjectionMatrix()
+                renderer.setSize(window.innerWidth, window.innerHeight)
+                labelRenderer.setSize(window.innerWidth, window.innerHeight)
+                render()
+            }
+              
+           const axesHelper = new THREE.AxesHelper(0.5);
+          
+		   scene.add( axesHelper );
+          
+    /* orientation helper
+    const ohOptions = {
+        className: 'orientation-helper-in-scene'
+        }, 
+        ohLabels = {
+            px: 'East',
+            nx: 'West',
+            pz: 'South',
+            nz: 'North',
+            py: 'Sky',
+            ny: 'Ground'
+        };
+         let _lastCLick = Date.now();
+         let orientationHelper = new OrientationHelper( camera, controls, ohOptions, ohLabels );
+            orientationHelper.addEventListener( 'change', onOrientationHelperChange );
+            orientationHelper.addEventListener( 'click', onOrientationHelperClick );
+
+            document.body.appendChild(orientationHelper.domElement);
+        */
+          
+           
+            let intersects
+           // const touchs= new THREE.Vector2()
+         
+        
+            let ctrlDown = false
+            let lineId = 0
+            let line
+            let drawingLine = false
+         
+            let pickpoint=null
+            const measurementLabels = {}
+            
+             // let buttonClicks=document.getElementById("button-click")
+             let canvas
+
+                let firstIntersection;
+
+                    // Set up the raycaster
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2();
+                    const vector = new THREE.Vector3();
+                    // Set up a touch event listener on the canvas element
+                    window.addEventListener('touchstart', onTouchStart);
+                
+                
+                  function onTouchStart(event) {
+                    // Set up the camera
+                          // Create a canvas element
+var canvas = document.createElement('canvas');
+
+// Set the canvas width and height
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Append the canvas to the body
+document.body.appendChild(canvas);
+
+// Add a touch start event listener to the canvas
+canvas.addEventListener('touchstart', function(event) {
+  // Get the touch position
+  var touch = event.touches[0];
+
+  // Get the canvas position on the screen
+  var canvasRect = canvas.getBoundingClientRect();
+
+  // Calculate the touch position in canvas coordinates
+  var touchX = touch.clientX - canvasRect.left;
+  var touchY = touch.clientY - canvasRect.top;
+
+  // Use the touch position to do something in your three.js scene
+});
+                  }
+           
+                    var animate = function () {
+                                requestAnimationFrame(animate)
+                                controls.update()
+                                render()
+                            }
+                            
+                            function render() {
+                                
+                                labelRenderer.render(scene, camera)
+                                renderer.render(scene, camera)
+                                camera.updateMatrixWorld()
+                            
+                                
+                            }
+                            animate()
+                            window.focus()
+        </script>
+    </body>
+</html>

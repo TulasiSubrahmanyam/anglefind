@@ -1,0 +1,295 @@
+<html>
+ 
+<script type="importmap">
+    {
+        "imports": {
+            "three": "./three.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from './three.module.js';
+    import { OrbitControls } from './OrbitControls.js';
+    import { GLTFLoader } from './GLTFLoader.js';
+    import { RGBELoader } from './RGBELoader.js';
+    import { CSS2DRenderer, CSS2DObject } from './CSS2DRenderer.js';
+    import { OrientationHelper } from './OrientationHelper.js';
+
+    import Stats from './stats.module.js';//node_modules\three\examples\jsm\libs\stats.module.js
+    import { GPUStatsPanel } from './GPUStatsPanel.js';
+
+    import { GUI } from './lil-gui.module.min.js';
+   // import { Line2 } from './Line2.js';
+    import { LineMaterial } from './LineMaterial.js';
+    import { LineGeometry } from './LineGeometry.js';
+    import * as GeometryUtils from './GeometryUtils.js';
+
+    import { FontLoader } from './FontLoader.js';
+    import { TextGeometry } from './TextGeometry.js';
+// Define the points as Three.js Vector3 objects
+// Set up the scene, camera, and renderer
+const scene = new THREE.Scene()
+
+var light = new THREE.SpotLight()
+light.position.set(12.5, 12.5, 12.5)
+light.castShadow = true
+light.shadow.mapSize.width = 1024
+light.shadow.mapSize.height = 1024
+scene.add(light)
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+camera.position.x = 15
+camera.position.y = 15
+camera.position.z = 15
+
+
+const renderer = new THREE.WebGLRenderer()
+renderer.physicallyCorrectLights = true;
+renderer.shadowMap.enabled = true
+renderer.outputEncoding = THREE.sRGBEncoding
+renderer.setSize(window.innerWidth, window.innerHeight)
+document.body.appendChild(renderer.domElement)
+
+
+const labelRenderer = new CSS2DRenderer()
+labelRenderer.setSize(window.innerWidth, window.innerHeight)
+labelRenderer.domElement.style.position = 'absolute'
+labelRenderer.domElement.style.top = '0px'
+labelRenderer.domElement.style.pointerEvents = 'none'
+document.body.appendChild(labelRenderer.domElement)
+
+const  stats = new Stats();
+document.body.appendChild( stats.dom );
+
+const gpuPanel = new GPUStatsPanel( renderer.getContext() );
+    stats.addPanel( gpuPanel );
+    stats.showPanel( 0 );
+
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enabled=true
+
+const container=document.getElementById("container")
+const toggleButton=document.getElementById("hidedata")
+
+const axesHelper = new THREE.AxesHelper(0.5);
+scene.add( axesHelper );
+
+const pickableObjects = new Array()
+const loader = new GLTFLoader()
+loader.load(
+    './ErgonomicTableScene_Nov_22_22.glb',
+    function (gltf) {
+        gltf.scene.traverse(function (child) {
+            if (child.isMesh) {
+                let m = child
+                switch (m.name) {
+                    case 'Plane':
+                        m.receiveShadow = true
+                        break
+                    default:
+                        m.castShadow = true
+                }
+                pickableObjects.push(m)
+            }
+        })
+        scene.add(gltf.scene)
+        
+    },
+    (xhr) => {
+        console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+        
+    },
+    (error) => {
+        console.log(error)
+    }
+)
+
+window.addEventListener('resize', onWindowResize, false)
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    labelRenderer.setSize(window.innerWidth, window.innerHeight)
+    render()
+  
+}
+//------------------------------new-------------------------------------
+var mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster()
+// Create a SphereGeometry and MeshBasicMaterial for the dots
+var dotGeometry = new THREE.SphereGeometry(0.1, 0.5, 0.5);
+var dotMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+
+// Define an array to store the picked points
+var points = [];
+
+// Bind a function to the mousedown event of the canvas
+document.addEventListener('mousedown', onMouseDown);
+
+function onMouseDown(event) {
+  // Calculate the mouse position in normalized device coordinates
+  // (-1 to +1) for both components
+  mouse.x = (event.clientX /  renderer.domElement.clientWidth) * 2 - 1;
+  mouse.y = -(event.clientY /  renderer.domElement.clientHeight) * 2 + 1;
+
+  // Update the picking ray with the camera and mouse position
+  raycaster.setFromCamera(mouse, camera);
+
+  // Calculate objects intersecting the picking ray
+  var intersects = raycaster.intersectObjects(scene.children, true);
+
+  if (intersects.length > 0) {
+    // Store the intersection point in the points array
+    points.push(intersects[0].point);
+    var dot = new THREE.Mesh(dotGeometry, dotMaterial);
+    dot.position.copy(intersects[0].point);
+    scene.add(dot);
+    console.log("dot Position","x",intersects[0].point.x,"y",intersects[0].point.y,"z",intersects[0].point.z)
+    // If there are two points in the array, create a line between them points.length>=1
+    if (points.length ===3) {
+      // Create a Line and add it to the scene
+    // console.log(points[0])
+      var geometry = new THREE.BufferGeometry().setFromPoints(points);
+      var material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+      var line = new THREE.Line(geometry, material);
+      scene.add(line)
+      // Clear the points array
+     // points = []; 
+  }
+  if(points.length===3){
+    // Find vectors for the two lines formed by the points
+      var a = new THREE.Vector3().subVectors(points[1], points[0]);
+      var b = new THREE.Vector3().subVectors(points[2], points[1]);
+
+      // Find the angle between the vectors using the dot product
+      var angle = Math.acos(a.dot(b) / (a.length() * b.length()));
+
+      console.log("Angle:", angle);
+      console.log(angle*180/Math.PI)
+  }
+  /*if(points.length===3){
+    var point1=new THREE.Vector3(points[0].x,points[0].y,points[0].z)
+    console.log("poin1",point1)
+    var  point2=new THREE.Vector3(points[1].x,points[1].y,points[1].z)
+    console.log("poin2",point2)
+    var  point3=new THREE.Vector3(points[2].x,points[2].y,points[2].z)
+    console.log("poin3",point3)
+
+    var a=new THREE.Vector3();
+    a.copy(point2).sub(point1);
+    console.log("a",a)
+    var b=new THREE.Vector3();
+    b.copy(point3).sub(point1)
+    console.log("b",b)
+//var a=point2.sub(point1);
+// console.log("a",a)
+//var b=point3.sub(point1)
+ //console.log("b",b)
+ //var angle = a.angleTo(b);
+var cross = a.clone().cross(b);
+var angle = Math.asin(cross.length() / (a.length() * b.length()));
+
+var angleInDegrees = (angle * 180 / Math.PI);
+    console.log("Angle",angle)
+    console.log("angleDegree",angleInDegrees)
+  }*
+
+     // If there are three points in the array, calculate the angle between them
+    /* if (points.length === 3) {
+      // Calculate the angle in radians
+   /*   var angle = Math.atan2(
+  points[2].y - points[1].y,
+  points[2].x - points[1].x
+) - Math.atan2(
+  points[0].y - points[1].y,
+  points[0].x - points[1].x
+);
+
+      // Convert angle to degrees
+    //  angle = (angle * 180 / Math.PI);
+
+      console.log('Angle:', angle);
+      points = [];
+     
+     }*/
+
+   /*  if (points.length === 3) {
+    // Calculate the distance between the first two points
+    var d1 = Math.sqrt(
+      Math.pow(points[1].x - points[0].x, 2) +
+      Math.pow(points[1].y - points[0].y, 2) +
+      Math.pow(points[1].z - points[0].z, 2)
+    );
+    // Calculate the distance between the first and third points
+    var d2 = Math.sqrt(
+      Math.pow(points[2].x - points[0].x, 2) +
+      Math.pow(points[2].y - points[0].y, 2) +
+      Math.pow(points[2].z - points[0].z, 2)
+    );
+    // Calculate the distance between the second and third points
+    var d3 = Math.sqrt(
+      Math.pow(points[2].x - points[1].x, 2) +
+      Math.pow(points[2].y - points[1].y, 2) +
+      Math.pow(points[2].z - points[1].z, 2)
+    );
+    // Calculate the angle in radians
+    var angle = Math.acos((d1 * d1 + d2 * d2 - d3 * d3) / (2 * d1 * d2))*100;
+
+    // Convert angle to degrees
+    // angle = angle * 180 / Math.PI;
+
+    console.log('Angle:', angle);
+
+    // Clear the points array
+   // points = [];
+  }*/
+  }
+}
+
+// Set up the line geometry and material
+/*var geometry = new THREE.Geometry();
+geometry.vertices.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0));
+var material = new THREE.LineBasicMaterial({color: 0x0000ff});
+
+// Set up the points array
+var points = [];*/
+
+          
+
+// Render loop
+function render() {
+  requestAnimationFrame(render);
+  renderer.render(scene, camera);
+}
+render();
+
+
+// three.js animataed line using BufferGeometry
+
+/*var points = [];
+
+controls.addEventListener('mousedown', function(event) {
+  var x = event.clientX;
+  var y = event.clientY;
+  var mouse = new THREE.Vector2();
+  mouse.x = (x / window.innerWidth) * 2 - 1;
+  mouse.y = -(y / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  var intersects = raycaster.intersectObjects(scene.children);
+  if (intersects.length > 0) {
+    points.push(intersects[0].point);
+  }
+  console.log("Clicked at: (" + x + ", " + y + ")");
+  if (points.length >= 2) {
+    if (points.length <= 3) {
+      var line = new THREE.Line(geometry, material);
+      scene.add(line);
+      line.geometry.vertices[0] = points[points.length - 2];
+      line.geometry.vertices[1] = points[points.length - 1];
+      line.geometry.verticesNeedUpdate = true;
+    }
+  }
+});*/
+    </script>
+</html>
